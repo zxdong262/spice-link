@@ -1,1 +1,1 @@
-## 👉 [Please follow one of these issue templates](https://github.com/electerm/ielecterm/issues/new/choose) 👈
+## 👉 [Please follow one of these issue templates](https://github.com/zxdong262/spice-link/issues/new/choose) 👈
