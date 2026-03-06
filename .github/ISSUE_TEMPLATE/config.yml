@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ⁉️ Need help with spice-Link?
+    url: https://github.com/zxdong262/spice-link/discussions
+    about: Please start a discussion before opening a bug.

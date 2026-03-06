@@ -1,0 +1,189 @@
+# This workflow builds a universal Mac App Store (MAS) version directly using electron-builder
+# without separate x64/arm64 builds
+
+name: mac-mas-universal-simple
+
+on:
+  push:
+    branches: [ build, test, build-only, mas ]
+
+jobs:
+  build-universal-mas:
+    runs-on: macos-15
+    environment: build
+    if: ${{ !contains(github.event.head_commit.message, '[skip build]') && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip mac]') }}
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v5
+      with:
+        node-version: 22.x
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+    
+
+    - run: npm config set legacy-peer-deps true
+    - run: npm install -g yarn
+    
+    - name: Download source code
+      run: 'curl -H "auth: $DOWNLOAD_SRC_TOKEN" $DOWNLOAD_URL -o src-archive.tar.gz'
+      env:
+        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
+        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
+    
+    - name: Extract source code
+      run: |
+        tar -zxvf src-archive.tar.gz
+        cp -a ./ispice-client/. ./ && ls -al
+    
+    - name: Install project dependencies
+      run: npm i
+    
+    - name: Prepare build environment
+      run: npm run b
+    - run: npm run pb
+
+    - name: Save provisioning profile
+      env:
+        MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
+      run: |
+        echo "$MAS_PROVISIONING_PROFILE" | base64 --decode > build/embedded.provisionprofile
+        ls -la build/
+    
+    - name: Copy MAS configuration files
+      run: |
+        # Copy the universal pkg config from configs
+        cp configs/electron-builder-mas-pkg.json electron-builder-mas.json
+        
+        # Verify configuration
+        echo "Using electron-builder config:"
+        cat electron-builder-mas.json
+    
+    - name: Build universal MAS package
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BUILD_NUMBER: ${{ secrets.BUILD_NUMBER }}
+        CSC_LINK: ${{ secrets.MAS_CSC_LINK }}
+        CSC_KEY_PASSWORD: ${{ secrets.MAS_CSC_KEY_PASSWORD }}
+        CSC_INSTALLER_LINK: ${{ secrets.MAS_INSTALLER_CSC_LINK }}
+        CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.MAS_INSTALLER_CSC_KEY_PASSWORD }}
+      run: |
+        echo "Building universal MAS package directly with electron-builder..."
+        
+        # Use electron-builder to build a universal MAS package
+        # The --universal flag tells electron-builder to create a universal binary
+        ./node_modules/.bin/electron-builder \
+          --config electron-builder-mas.json \
+          --mac mas \
+          --universal
+        
+        echo "Build complete! Checking output..."
+        ls -lh dist-mas-final/
+        
+        # Verify .app and .pkg files were created
+        echo "\nVerifying build outputs:"
+        find dist-mas-final -name "*.app" -type d -ls
+        find dist-mas-final -name "*.pkg" -type f -ls
+        
+        # Check architecture of the main binary
+        APP_NAME=$(find dist-mas-final -name "*.app" -type d | head -1)
+        if [ -n "$APP_NAME" ]; then
+          echo "\nVerifying universal binary architecture..."
+          lipo -info "$APP_NAME/Contents/MacOS/spice-link"
+        fi
+        
+        # Verify .pkg was created
+        PKG_COUNT=$(find dist-mas-final -name "*.pkg" | wc -l | tr -d ' ')
+        if [ "$PKG_COUNT" -eq 0 ]; then
+          echo "❌ ERROR: No .pkg file was created!"
+          exit 1
+        fi
+        echo "✅ Found $PKG_COUNT .pkg file(s)"
+    
+    - name: Upload to App Store Connect
+      env:
+        APPLE_ID: ${{ secrets.APPLEID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLEIDPASS }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        BUNDLE_ID="com.electerm.spice-link"
+
+        echo "Searching for .pkg file..."
+        PKG_FILE=$(find dist-mas-final -name "*.pkg" -type f | head -1)
+        
+        if [ -z "$PKG_FILE" ]; then
+          echo "ERROR: No .pkg file found in dist-mas-final/"
+          echo "Contents of dist-mas-final:"
+          ls -laR dist-mas-final/
+          exit 1
+        fi
+        
+        echo "Found PKG file: $PKG_FILE"
+        echo "File size: $(du -h "$PKG_FILE" | cut -f1)"
+        echo "Bundle ID: $BUNDLE_ID"
+        
+        echo ""
+        echo "Uploading to App Store Connect using altool..."
+        
+        xcrun altool --upload-app \
+          --type macos \
+          --file "$PKG_FILE" \
+          --username "$APPLE_ID" \
+          --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+          --primary-bundle-id "$BUNDLE_ID" \
+          --verbose || {
+          echo ""
+          echo "❌ Upload failed"
+          echo ""
+          echo "Common reasons:"
+          echo "  • App with bundle ID '$BUNDLE_ID' doesn't exist in App Store Connect"
+          echo "  • Apple ID doesn't have access to this app"
+          echo "  • App-specific password is incorrect or expired"
+          echo ""
+          echo "Solutions:"
+          echo "  1. Create app in App Store Connect: https://appstoreconnect.apple.com/apps"
+          echo "  2. Verify bundle ID matches exactly: $BUNDLE_ID"
+          echo "  3. Check Apple ID has App Manager or Admin role"
+          echo "  4. Regenerate app-specific password: https://appleid.apple.com"
+          echo ""
+          echo "Alternative: Download PKG artifact and upload via Transporter.app GUI"
+          echo ""
+          exit 1
+        }
+        
+        echo ""
+        echo "✅ Upload to App Store Connect complete!"
+        echo ""
+        echo "Next steps:"
+        echo "1. Go to https://appstoreconnect.apple.com"
+        echo "2. Select your app"
+        echo "3. Wait for Apple's automated processing (usually 5-30 minutes)"
+        echo "4. Submit for review"
+    
+    - name: Upload MAS package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-mas-universal-pkg
+        path: dist-mas-final/**/*.pkg
+        retention-days: 7
+    
+    - name: Summary
+      run: |
+        echo "## MAS Universal Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Information:" >> $GITHUB_STEP_SUMMARY
+        echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Bundle ID: com.electerm.spice-link" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Output Files:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        find dist-mas-final -type f -exec ls -lh {} \; >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Method:" >> $GITHUB_STEP_SUMMARY
+        echo "- Built universal MAS directly using electron-builder"
+        echo "- Used --universal flag for single-step universal binary creation" >> $GITHUB_STEP_SUMMARY
+        echo "- Proper MAS entitlements from start" >> $GITHUB_STEP_SUMMARY
