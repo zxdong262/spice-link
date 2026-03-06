@@ -32,7 +32,8 @@ jobs:
         DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
         DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
     - run: tar -zxvf src-archive.tar.gz
-    - run: cp -a ./ispice-client/. ./ && ls -al
+    - run: ls -al
+    # - run: cp -a ./ispice-client/. ./ && ls -al
     - run: npm i
 
     # script:
