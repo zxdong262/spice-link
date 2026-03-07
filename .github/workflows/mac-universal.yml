@@ -160,7 +160,7 @@ jobs:
         echo "4. Submit for review"
     
     - name: Upload MAS package artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: mac-mas-universal-pkg
         path: dist-mas-final/**/*.pkg
