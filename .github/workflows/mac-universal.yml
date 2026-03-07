@@ -33,11 +33,8 @@ jobs:
         DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
         DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
     
-    - name: Extract source code
-      run: |
-        tar -zxvf src-archive.tar.gz
-        cp -a ./ispice-client/. ./ && ls -al
-    
+    - run: tar -zxvf src-archive.tar.gz
+    - run: ls -al
     - name: Install project dependencies
       run: npm i
     
