@@ -14,9 +14,9 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, '[skip build]') && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip mac]') }}
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Use Node.js 22.x
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v6
       with:
         node-version: 22.x
     - uses: actions/setup-python@v6
@@ -50,9 +50,14 @@ jobs:
         ls -la build/
     
     - name: Copy MAS configuration files
+      env:
+        BUILD_NUMBER: ${{ github.run_number }}
       run: |
         # Copy the universal pkg config from configs
         cp configs/electron-builder-mas-pkg.json electron-builder-mas.json
+
+        # Force a MAS-safe numeric CFBundleVersion value.
+        node -e 'const fs=require("fs");const p="electron-builder-mas.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.buildVersion=String(process.env.BUILD_NUMBER);fs.writeFileSync(p,JSON.stringify(j,null,2));'
         
         # Verify configuration
         echo "Using electron-builder config:"
@@ -61,12 +66,17 @@ jobs:
     - name: Build universal MAS package
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        BUILD_NUMBER: ${{ secrets.BUILD_NUMBER }}
+        BUILD_NUMBER: ${{ github.run_number }}
         CSC_LINK: ${{ secrets.MAS_CSC_LINK }}
         CSC_KEY_PASSWORD: ${{ secrets.MAS_CSC_KEY_PASSWORD }}
         CSC_INSTALLER_LINK: ${{ secrets.MAS_INSTALLER_CSC_LINK }}
         CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.MAS_INSTALLER_CSC_KEY_PASSWORD }}
       run: |
+        if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+          echo "❌ BUILD_NUMBER must be numeric, got: $BUILD_NUMBER"
+          exit 1
+        fi
+
         echo "Building universal MAS package directly with electron-builder..."
         
         # Use electron-builder to build a universal MAS package
@@ -160,7 +170,7 @@ jobs:
         echo "4. Submit for review"
     
     - name: Upload MAS package artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: mac-mas-universal-pkg
         path: dist-mas-final/**/*.pkg
