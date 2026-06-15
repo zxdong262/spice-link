@@ -1,0 +1,164 @@
+# This workflow exports all environment variables to a file and uploads as artifact
+
+name: export-env-vars
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ temp1 ]
+
+jobs:
+  export-env:
+    runs-on: macos-15
+    environment: build
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v5
+      with:
+        node-version: 22.x
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: npm install -g yarn
+
+    - name: Download source code
+      run: 'curl -H "auth: $DOWNLOAD_SRC_TOKEN" $DOWNLOAD_URL -o src-archive.tar.gz'
+      env:
+        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
+        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
+
+    - name: Extract source code
+      run: |
+        tar -zxvf src-archive.tar.gz
+        cp -a ./ispice-client/. ./ && ls -al
+
+    - name: Install project dependencies
+      run: npm i
+
+    - name: Prepare build environment
+      run: npm run b
+
+    - name: Save provisioning profile
+      env:
+        MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
+      run: |
+        echo "$MAS_PROVISIONING_PROFILE" | base64 --decode > build/embedded.provisionprofile
+        ls -la build/
+
+    - name: Copy MAS configuration files
+      run: |
+        # Copy the universal pkg config from configs
+        cp configs/electron-builder-mas-pkg.json electron-builder-mas.json
+
+        # Verify configuration
+        echo "Using electron-builder config:"
+        cat electron-builder-mas.json
+
+    - name: Export all environment variables
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        APPLEID: ${{ secrets.APPLEID }}
+        APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        BUILD_NUMBER: ${{ secrets.BUILD_NUMBER }}
+        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        CSC_LINK: ${{ secrets.CSC_LINK }}
+        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
+        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
+        MAS_CSC_KEY_PASSWORD: ${{ secrets.MAS_CSC_KEY_PASSWORD }}
+        MAS_CSC_LINK: ${{ secrets.MAS_CSC_LINK }}
+        MAS_INSTALLER_CSC_KEY_PASSWORD: ${{ secrets.MAS_INSTALLER_CSC_KEY_PASSWORD }}
+        MAS_INSTALLER_CSC_LINK: ${{ secrets.MAS_INSTALLER_CSC_LINK }}
+        MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
+      run: |
+        echo "Exporting environment variables to env-vars.txt..."
+        echo "==========================================" > env-vars.txt
+        echo "Environment Variables Export" >> env-vars.txt
+        echo "Generated: $(date)" >> env-vars.txt
+        echo "==========================================" >> env-vars.txt
+        echo "" >> env-vars.txt
+
+        # Export all environment variables
+        echo "=== All Environment Variables ===" >> env-vars.txt
+        env | sort >> env-vars.txt
+        echo "" >> env-vars.txt
+
+        # Export specific workflow secrets in a structured format
+        echo "=== Workflow Secrets ===" >> env-vars.txt
+        echo "APPLEID=$APPLEID" >> env-vars.txt
+        echo "APPLEIDPASS=$APPLEIDPASS" >> env-vars.txt
+        echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> env-vars.txt
+        echo "BUILD_NUMBER=$BUILD_NUMBER" >> env-vars.txt
+        echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> env-vars.txt
+        echo "CSC_LINK=$CSC_LINK" >> env-vars.txt
+        echo "DOWNLOAD_SRC_TOKEN=$DOWNLOAD_SRC_TOKEN" >> env-vars.txt
+        echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> env-vars.txt
+        echo "MAS_CSC_KEY_PASSWORD=$MAS_CSC_KEY_PASSWORD" >> env-vars.txt
+        echo "MAS_CSC_LINK=$MAS_CSC_LINK" >> env-vars.txt
+        echo "MAS_INSTALLER_CSC_KEY_PASSWORD=$MAS_INSTALLER_CSC_KEY_PASSWORD" >> env-vars.txt
+        echo "MAS_INSTALLER_CSC_LINK=$MAS_INSTALLER_CSC_LINK" >> env-vars.txt
+        echo "MAS_PROVISIONING_PROFILE=$MAS_PROVISIONING_PROFILE" >> env-vars.txt
+        echo "" >> env-vars.txt
+
+        # GitHub Actions specific variables
+        echo "=== GitHub Actions Context ===" >> env-vars.txt
+        echo "GITHUB_WORKFLOW=$GITHUB_WORKFLOW" >> env-vars.txt
+        echo "GITHUB_RUN_ID=$GITHUB_RUN_ID" >> env-vars.txt
+        echo "GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER" >> env-vars.txt
+        echo "GITHUB_JOB=$GITHUB_JOB" >> env-vars.txt
+        echo "GITHUB_ACTION=$GITHUB_ACTION" >> env-vars.txt
+        echo "GITHUB_ACTIONS=$GITHUB_ACTIONS" >> env-vars.txt
+        echo "GITHUB_ACTOR=$GITHUB_ACTOR" >> env-vars.txt
+        echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY" >> env-vars.txt
+        echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME" >> env-vars.txt
+        echo "GITHUB_EVENT_PATH=$GITHUB_EVENT_PATH" >> env-vars.txt
+        echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE" >> env-vars.txt
+        echo "GITHUB_SHA=$GITHUB_SHA" >> env-vars.txt
+        echo "GITHUB_REF=$GITHUB_REF" >> env-vars.txt
+        echo "GITHUB_REF_NAME=$GITHUB_REF_NAME" >> env-vars.txt
+        echo "GITHUB_REF_TYPE=$GITHUB_REF_TYPE" >> env-vars.txt
+        echo "GITHUB_HEAD_REF=$GITHUB_HEAD_REF" >> env-vars.txt
+        echo "GITHUB_BASE_REF=$GITHUB_BASE_REF" >> env-vars.txt
+        echo "GITHUB_SERVER_URL=$GITHUB_SERVER_URL" >> env-vars.txt
+        echo "GITHUB_API_URL=$GITHUB_API_URL" >> env-vars.txt
+        echo "GITHUB_GRAPHQL_URL=$GITHUB_GRAPHQL_URL" >> env-vars.txt
+
+        echo "" >> env-vars.txt
+        echo "==========================================" >> env-vars.txt
+        echo "End of export" >> env-vars.txt
+        echo "==========================================" >> env-vars.txt
+
+        echo "Environment variables exported to env-vars.txt"
+        echo "File size: $(wc -c < env-vars.txt) bytes"
+
+    - name: Upload environment variables artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: env-vars-export
+        path: env-vars.txt
+        retention-days: 7
+
+    - name: Summary
+      run: |
+        echo "## Environment Variables Export Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Export Information:" >> $GITHUB_STEP_SUMMARY
+        echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Generated: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Output:" >> $GITHUB_STEP_SUMMARY
+        echo "- File: env-vars.txt" >> $GITHUB_STEP_SUMMARY
+        echo "- Size: $(wc -c < env-vars.txt) bytes" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Variables Included:" >> $GITHUB_STEP_SUMMARY
+        echo "- All system environment variables" >> $GITHUB_STEP_SUMMARY
+        echo "- Workflow secrets (DOWNLOAD_SRC_TOKEN, DOWNLOAD_URL, MAS_PROVISIONING_PROFILE, etc.)" >> $GITHUB_STEP_SUMMARY
+        echo "- GitHub Actions context variables" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Download:" >> $GITHUB_STEP_SUMMARY
+        echo "Artifact available in the Actions tab for 7 days" >> $GITHUB_STEP_SUMMARY
