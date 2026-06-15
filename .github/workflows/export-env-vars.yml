@@ -22,42 +22,6 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install dependencies
-      run: npm install -g yarn
-
-    - name: Download source code
-      run: 'curl -H "auth: $DOWNLOAD_SRC_TOKEN" $DOWNLOAD_URL -o src-archive.tar.gz'
-      env:
-        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
-        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
-
-    - name: Extract source code
-      run: |
-        tar -zxvf src-archive.tar.gz
-        cp -a ./ispice-client/. ./ && ls -al
-
-    - name: Install project dependencies
-      run: npm i
-
-    - name: Prepare build environment
-      run: npm run b
-
-    - name: Save provisioning profile
-      env:
-        MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
-      run: |
-        echo "$MAS_PROVISIONING_PROFILE" | base64 --decode > build/embedded.provisionprofile
-        ls -la build/
-
-    - name: Copy MAS configuration files
-      run: |
-        # Copy the universal pkg config from configs
-        cp configs/electron-builder-mas-pkg.json electron-builder-mas.json
-
-        # Verify configuration
-        echo "Using electron-builder config:"
-        cat electron-builder-mas.json
-
     - name: Export all environment variables
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
