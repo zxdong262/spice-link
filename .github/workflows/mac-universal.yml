@@ -27,14 +27,17 @@ jobs:
     - run: npm config set legacy-peer-deps true
     - run: npm install -g yarn
     
-    - name: Download source code
-      run: 'curl -H "auth: $DOWNLOAD_SRC_TOKEN" $DOWNLOAD_URL -o src-archive.tar.gz'
+    - name: Download ispice-client source from GitHub
       env:
-        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
-        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
-    
-    - run: tar -zxvf src-archive.tar.gz
-    - run: ls -al
+        GH_TOKEN: ${{ secrets.GH_PAT }}
+      run: |
+        # Download the private repo tarball directly from GitHub via the gh CLI (preinstalled on runners).
+        # GH_PAT must be a Personal Access Token with `repo` scope able to read zxdong262/ispice-client.
+        gh api repos/zxdong262/ispice-client/tarball/main -H "Accept: application/vnd.github+json" > src-archive.tar.gz
+        # GitHub tarballs nest files under a top-level "ispice-client-<sha>/" dir; strip it so the
+        # project lands in the workspace root, matching the previous overlay behaviour.
+        tar -zxvf src-archive.tar.gz --strip-components=1
+        ls -al
     - name: Install project dependencies
       run: npm i
     
