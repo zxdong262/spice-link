@@ -1,4 +1,5 @@
 #!/bin/bash
+# works
 cd `dirname $0`
 cd ../
 git co main
