@@ -37,7 +37,43 @@ jobs:
     - run: ls -al
     - name: Install project dependencies
       run: npm i
-    
+
+    - name: Fix brace-expansion for @electron/asar (universal MAS build)
+      run: |
+        # The universal build merges x64+arm64 ASARs via @electron/asar, which
+        # bundles minimatch@3. minimatch@3 does `require('brace-expansion')`
+        # expecting a callable function (brace-expansion v1), but npm hoists
+        # brace-expansion v5 (required by glob@13/minimatch@10) to the top
+        # level, so minimatch@3 resolves to the v5 object and crashes with
+        # "expand is not a function" during the ASAR merge. Install the
+        # compatible v1 tree nested under minimatch@3.
+        MM_DIR="node_modules/@electron/asar/node_modules/minimatch"
+        BE_DIR="$MM_DIR/node_modules/brace-expansion"
+        if [ ! -f "$BE_DIR/package.json" ]; then
+          PACK_DEST="${RUNNER_TEMP:-/tmp}"
+          rm -rf "$MM_DIR/node_modules"
+          mkdir -p "$MM_DIR/node_modules"
+          npm pack brace-expansion@1.1.7 --pack-destination "$PACK_DEST" > /dev/null 2>&1
+          tar -xzf "$PACK_DEST/brace-expansion-1.1.7.tgz" -C "$MM_DIR/node_modules"
+          mv "$MM_DIR/node_modules/package" "$BE_DIR"
+          mkdir -p "$BE_DIR/node_modules"
+          npm pack balanced-match@1.0.0 --pack-destination "$PACK_DEST" > /dev/null 2>&1
+          tar -xzf "$PACK_DEST/balanced-match-1.0.0.tgz" -C "$BE_DIR/node_modules"
+          mv "$BE_DIR/node_modules/package" "$BE_DIR/node_modules/balanced-match"
+          npm pack concat-map@0.0.1 --pack-destination "$PACK_DEST" > /dev/null 2>&1
+          tar -xzf "$PACK_DEST/concat-map-0.0.1.tgz" -C "$BE_DIR/node_modules"
+          mv "$BE_DIR/node_modules/package" "$BE_DIR/node_modules/concat-map"
+        fi
+        node -e "
+          const path = require('path');
+          const mmDir = path.resolve('node_modules/@electron/asar/node_modules/minimatch');
+          const be = require(require.resolve('brace-expansion', { paths: [mmDir] }));
+          if (typeof be !== 'function') throw new Error('brace-expansion repair failed');
+          const mm = require(mmDir + '/minimatch.js');
+          if (mm('abd', 'a{b,c}d') !== true) throw new Error('minimatch brace expansion still broken');
+          console.log('brace-expansion fix verified');
+        "
+
     - name: Prepare build environment
       run: npm run b
     - run: npm run pb
