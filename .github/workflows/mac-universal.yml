@@ -29,7 +29,7 @@ jobs:
     
     - name: Download source code
       env:
-        GH_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
+        GH_TOKEN: ${{ secrets.GH_PAT }}
       run: |
         rm -rf ./ispice-client
         gh repo clone zxdong262/ispice-client ./ispice-client -- --depth=1
