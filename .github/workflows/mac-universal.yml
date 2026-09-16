@@ -28,13 +28,15 @@ jobs:
     - run: npm install -g yarn
     
     - name: Download source code
-      run: 'curl -H "auth: $DOWNLOAD_SRC_TOKEN" $DOWNLOAD_URL -o src-archive.tar.gz'
       env:
-        DOWNLOAD_SRC_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
-        DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
-    
-    - run: tar -zxvf src-archive.tar.gz
-    - run: ls -al
+        GH_TOKEN: ${{ secrets.DOWNLOAD_SRC_TOKEN }}
+      run: |
+        rm -rf ./ispice-client
+        gh repo clone zxdong262/ispice-client ./ispice-client -- --depth=1
+        rm -rf ./ispice-client/.git
+        cp -a ./ispice-client/. ./
+        rm -rf ./ispice-client
+        ls -al
     - name: Install project dependencies
       run: npm i
 
