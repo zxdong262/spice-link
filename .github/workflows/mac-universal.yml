@@ -207,12 +207,12 @@ jobs:
         echo "3. Wait for Apple's automated processing (usually 5-30 minutes)"
         echo "4. Submit for review"
     
-    - name: Upload MAS package artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: mac-mas-universal-pkg
-        path: dist-mas-final/**/*.pkg
-        retention-days: 7
+    # - name: Upload MAS package artifact
+    #   uses: actions/upload-artifact@v7
+    #   with:
+    #     name: mac-mas-universal-pkg
+    #     path: dist-mas-final/**/*.pkg
+    #     retention-days: 7
     
     - name: Summary
       run: |
